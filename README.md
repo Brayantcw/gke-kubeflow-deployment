@@ -2,37 +2,7 @@
 
 Modular Terraform project for deploying Kubeflow on a private GKE cluster in Google Cloud.
 
-## Architecture
-
-```
-                    ┌──────────────────────────────────────────┐
-                    │              GCP Project                 │
-                    │                                          │
-                    │  ┌──────────────────────────────────┐    │
-                    │  │           VPC Network             │    │
-                    │  │                                    │    │
-                    │  │  ┌────────────────────────────┐   │    │
-                    │  │  │    Private GKE Cluster      │   │    │
-                    │  │  │                            │   │    │
-                    │  │  │  ┌──────────────────────┐  │   │    │
-                    │  │  │  │     Kubeflow v1.11   │  │   │    │
-                    │  │  │  │  ┌────┐ ┌─────────┐ │  │   │    │
-                    │  │  │  │  │Istio│ │Pipelines│ │  │   │    │
-                    │  │  │  │  └────┘ └─────────┘ │  │   │    │
-                    │  │  │  │  ┌─────┐ ┌────────┐ │  │   │    │
-                    │  │  │  │  │Katib│ │Notebooks│ │  │   │    │
-                    │  │  │  │  └─────┘ └────────┘ │  │   │    │
-                    │  │  │  └──────────────────────┘  │   │    │
-                    │  │  └────────────────────────────┘   │    │
-                    │  │         │                          │    │
-                    │  │    Cloud NAT (outbound)            │    │
-                    │  └──────────────────────────────────┘    │
-                    │                                          │
-                    │  IAM: Workload Identity + least-priv SA  │
-                    └──────────────────────────────────────────┘
-```
-
-### Module Structure
+## Module Structure
 
 ```
 ├── modules/
