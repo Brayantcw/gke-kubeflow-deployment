@@ -29,3 +29,6 @@ Thumbs.db
 .idea/
 *.swp
 *.swo
+
+# Dev Container
+.devcontainer/
