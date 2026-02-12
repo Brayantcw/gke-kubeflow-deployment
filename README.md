@@ -1,55 +1,107 @@
 # GKE Kubeflow Deployment
 
-Terraform modules for deploying a GKE cluster on GCP, designed for Kubeflow workloads. Optimized for the GCP free tier + $300 trial credits.
+Modular Terraform project for deploying Kubeflow on a private GKE cluster in Google Cloud.
 
 ## Architecture
 
 ```
-gke-kubeflow-deployment/
-├── modules/
-│   ├── network/    # VPC, subnets, Cloud NAT, firewall
-│   ├── gke/        # Private GKE cluster with autoscaling
-│   ├── iam/        # Least-privilege service accounts, Workload Identity
-│   └── kubeflow/   # Istio (Helm), cert-manager (Helm), Kubeflow (kustomize)
-└── environments/
-    └── dev/        # Dev environment wiring all modules
+                    ┌──────────────────────────────────────────┐
+                    │              GCP Project                 │
+                    │                                          │
+                    │  ┌──────────────────────────────────┐    │
+                    │  │           VPC Network             │    │
+                    │  │                                    │    │
+                    │  │  ┌────────────────────────────┐   │    │
+                    │  │  │    Private GKE Cluster      │   │    │
+                    │  │  │                            │   │    │
+                    │  │  │  ┌──────────────────────┐  │   │    │
+                    │  │  │  │     Kubeflow v1.11   │  │   │    │
+                    │  │  │  │  ┌────┐ ┌─────────┐ │  │   │    │
+                    │  │  │  │  │Istio│ │Pipelines│ │  │   │    │
+                    │  │  │  │  └────┘ └─────────┘ │  │   │    │
+                    │  │  │  │  ┌─────┐ ┌────────┐ │  │   │    │
+                    │  │  │  │  │Katib│ │Notebooks│ │  │   │    │
+                    │  │  │  │  └─────┘ └────────┘ │  │   │    │
+                    │  │  │  └──────────────────────┘  │   │    │
+                    │  │  └────────────────────────────┘   │    │
+                    │  │         │                          │    │
+                    │  │    Cloud NAT (outbound)            │    │
+                    │  └──────────────────────────────────┘    │
+                    │                                          │
+                    │  IAM: Workload Identity + least-priv SA  │
+                    └──────────────────────────────────────────┘
 ```
 
-### Cost Optimization Decisions
+### Module Structure
 
-| Decision | Rationale |
-|---|---|
-| Single zone (`us-central1-a`) | Avoids multi-zone node replication costs |
-| Spot VMs (`e2-standard-4`) | 60-91% cheaper than on-demand |
-| 50GB `pd-standard` disks | Cheaper than SSD, sufficient for dev |
-| Single NAT gateway | Reduces NAT hourly costs |
-| Autoscaling 1-3 nodes | Scales down when idle |
+```
+├── modules/
+│   ├── network/     VPC, subnets (pod/service secondary ranges), Cloud NAT, firewall
+│   ├── gke/         Private GKE cluster with autoscaling node pools
+│   ├── iam/         Dedicated node SA, Kubeflow Pipelines SA, Workload Identity
+│   └── kubeflow/    Istio + cert-manager (Helm), Kubeflow components (kustomize)
+├── environments/
+│   └── dev/         Dev environment composing all modules
+└── .github/
+    └── workflows/   CI/CD: plan/apply + destroy
+```
 
-### Security
+## Supported Versions
 
-- **Private cluster**: Nodes have no public IPs; outbound via Cloud NAT
-- **Workload Identity**: Pods authenticate to GCP services without key files
-- **Least-privilege SA**: Dedicated node SA with only logging/monitoring/artifact roles
-- **Shielded nodes**: Secure boot and integrity monitoring enabled
-- **Master authorized networks**: Configurable API server access restriction
+| Component | Version | Source |
+|---|---|---|
+| Terraform | >= 1.3 | — |
+| Google Provider | ~> 7.0 | `hashicorp/google` |
+| GKE Module | ~> 43.0 | `terraform-google-modules/kubernetes-engine` |
+| Network Module | ~> 15.0 | `terraform-google-modules/network` |
+| Kubeflow | v1.11 | `kubeflow/manifests` (kustomize) |
+| Istio | 1.24.3 | Helm chart |
+| cert-manager | v1.17.2 | Helm chart |
+| Kustomization Provider | ~> 0.9 | `kbst/kustomization` |
+
+## Kubeflow Components
+
+Each component can be independently enabled or disabled via `terraform.tfvars`:
+
+| Component | Variable | Default | Description |
+|---|---|---|---|
+| Pipelines | `enable_pipelines` | `true` | ML workflow orchestration |
+| Notebooks | `enable_notebooks` | `true` | Jupyter notebook server |
+| Katib | `enable_katib` | `true` | Hyperparameter tuning / AutoML |
+| Training Operator | `enable_training_operator` | `true` | Distributed training (PyTorch, TF) |
+| Tensorboard | `enable_tensorboard` | `true` | Training visualization |
+| Volumes Web App | `enable_volumes_web_app` | `true` | PVC management UI |
+| KServe | `enable_kserve` | `false` | Model serving |
+| Knative Eventing | `enable_knative_eventing` | `false` | Event-driven workflows |
+| Spark Operator | `enable_spark_operator` | `false` | Apache Spark on K8s |
+| User Namespace | `enable_user_namespace` | `true` | Default user profile |
+
+Set `install_kubeflow = false` to deploy only the GKE infrastructure without Kubeflow.
+
+## Security
+
+- **Private cluster** — nodes have no public IPs, outbound traffic via Cloud NAT
+- **Workload Identity** — pods authenticate to GCP services without exported keys
+- **Least-privilege SA** — dedicated node service account with only logging, monitoring, and artifact registry roles
+- **Shielded nodes** — secure boot and integrity monitoring
+- **Master authorized networks** — configurable API server access restriction
+- **CI/CD auth** — Workload Identity Federation for GitHub Actions (no SA key secrets)
 
 ## Prerequisites
 
-1. A GCP project with billing enabled (free tier + $300 credits)
-2. `gcloud` CLI authenticated: `gcloud auth application-default login`
-3. Terraform >= 1.3
+- GCP project with billing enabled
+- `gcloud` CLI authenticated (`gcloud auth application-default login`)
+- Terraform >= 1.3
 
-## Deployment
+## Usage
 
-### Step 1: Configure
+### Local Deployment
 
 ```bash
 cd environments/dev
 cp terraform.tfvars.example terraform.tfvars
-# Edit terraform.tfvars with your project ID
+# Set your project_id and adjust component toggles
 ```
-
-### Step 2: Deploy
 
 ```bash
 terraform init
@@ -57,61 +109,46 @@ terraform plan
 terraform apply
 ```
 
-### Step 3: Connect to the cluster
+### Connect to the Cluster
 
 ```bash
-# The command is printed as a Terraform output
 $(terraform output -raw kubeconfig_command)
-
-# Verify
 kubectl get nodes
 ```
 
-### Step 4: Access Kubeflow
+### Access Kubeflow
 
-Kubeflow is installed automatically (Istio + cert-manager via Helm, Kubeflow v1.11 via kustomize manifests). After `terraform apply` completes, pods take 5-10 minutes to become ready.
+After apply completes, pods take 5-10 minutes to become ready.
 
 ```bash
-# Check pod status
 kubectl get pods -n kubeflow
-
-# Port-forward to access the dashboard
 kubectl port-forward svc/istio-ingressgateway -n istio-system 8080:80
-
 # Open http://localhost:8080
 # Default credentials: user@example.com / 12341234
 ```
 
-To skip Kubeflow installation (infra only), set `install_kubeflow = false` in `terraform.tfvars`.
+## CI/CD
 
-## CI/CD (GitHub Actions)
+Two GitHub Actions workflows:
 
-Two workflows are provided:
-
-| Workflow | Trigger | Purpose |
+| Workflow | Trigger | Pipeline |
 |---|---|---|
-| `terraform.yml` | Push to `main`, PRs, manual | Format, validate, plan, apply |
-| `terraform-destroy.yml` | Manual only | Destroy all infrastructure |
+| `terraform.yml` | Push to `main`, PRs, manual | fmt → validate → plan → apply |
+| `terraform-destroy.yml` | Manual only | confirm → plan destroy → destroy |
 
-### How it works
+- **Apply** requires `production` environment approval
+- **Destroy** requires typing `"destroy"` + `destroy` environment approval
 
-- **PR opened** → runs fmt, validate, plan. Posts plan output as PR comment.
-- **Merge to main** → runs plan + apply. Apply requires `production` environment approval.
-- **Manual dispatch** → same as push to main, with environment selector.
-- **Destroy** → manual only, requires typing "destroy" to confirm + `destroy` environment approval.
-
-### GCP Authentication Setup
-
-The workflows use **Workload Identity Federation** (no service account keys). One-time setup:
+### GCP Authentication (Workload Identity Federation)
 
 ```bash
-# 1. Create a Workload Identity Pool
+# Create Workload Identity Pool
 gcloud iam workload-identity-pools create "github-pool" \
   --project="YOUR_PROJECT_ID" \
   --location="global" \
   --display-name="GitHub Actions Pool"
 
-# 2. Create a Provider for GitHub
+# Create OIDC Provider
 gcloud iam workload-identity-pools providers create-oidc "github-provider" \
   --project="YOUR_PROJECT_ID" \
   --location="global" \
@@ -120,19 +157,19 @@ gcloud iam workload-identity-pools providers create-oidc "github-provider" \
   --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
   --issuer-uri="https://token.actions.githubusercontent.com"
 
-# 3. Create a Service Account for Terraform
+# Create Terraform Service Account
 gcloud iam service-accounts create "terraform-github" \
   --project="YOUR_PROJECT_ID" \
   --display-name="Terraform GitHub Actions"
 
-# 4. Grant required roles
+# Grant roles
 for role in roles/editor roles/iam.securityAdmin roles/container.admin; do
   gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
     --member="serviceAccount:terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
     --role="$role"
 done
 
-# 5. Allow GitHub Actions to impersonate the SA
+# Allow GitHub to impersonate the SA
 gcloud iam service-accounts add-iam-policy-binding \
   "terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
   --project="YOUR_PROJECT_ID" \
@@ -140,34 +177,28 @@ gcloud iam service-accounts add-iam-policy-binding \
   --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/Brayantcw/gke-kubeflow-deployment"
 ```
 
-### GitHub Secrets
+### GitHub Configuration
 
-Add these in **Settings → Secrets and variables → Actions**:
+**Secrets** (Settings → Secrets and variables → Actions):
 
 | Secret | Value |
 |---|---|
 | `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
 | `GCP_SERVICE_ACCOUNT` | `terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com` |
 
-### GitHub Environments
+**Environments** (Settings → Environments):
 
-Create two environments in **Settings → Environments**:
-
-- **`production`** — add required reviewers for apply approval
-- **`destroy`** — add required reviewers for destroy approval
+- `production` — required reviewers for apply
+- `destroy` — required reviewers for destroy
 
 ## Teardown
 
-Via GitHub Actions (recommended):
-1. Go to **Actions → Terraform Destroy → Run workflow**
+Via GitHub Actions:
+1. **Actions → Terraform Destroy → Run workflow**
 2. Type `destroy` to confirm
 
-Or locally:
+Locally:
 ```bash
 cd environments/dev
 terraform destroy
 ```
-
-## Estimated Monthly Cost (Dev)
-
-With Spot VMs and single-zone, expect ~$30-60/month for a 1-node cluster. Scale to 0 by destroying when not in use to stay within the $300 credit budget.
