@@ -84,8 +84,85 @@ kubectl port-forward svc/istio-ingressgateway -n istio-system 8080:80
 
 To skip Kubeflow installation (infra only), set `install_kubeflow = false` in `terraform.tfvars`.
 
+## CI/CD (GitHub Actions)
+
+Two workflows are provided:
+
+| Workflow | Trigger | Purpose |
+|---|---|---|
+| `terraform.yml` | Push to `main`, PRs, manual | Format, validate, plan, apply |
+| `terraform-destroy.yml` | Manual only | Destroy all infrastructure |
+
+### How it works
+
+- **PR opened** → runs fmt, validate, plan. Posts plan output as PR comment.
+- **Merge to main** → runs plan + apply. Apply requires `production` environment approval.
+- **Manual dispatch** → same as push to main, with environment selector.
+- **Destroy** → manual only, requires typing "destroy" to confirm + `destroy` environment approval.
+
+### GCP Authentication Setup
+
+The workflows use **Workload Identity Federation** (no service account keys). One-time setup:
+
+```bash
+# 1. Create a Workload Identity Pool
+gcloud iam workload-identity-pools create "github-pool" \
+  --project="YOUR_PROJECT_ID" \
+  --location="global" \
+  --display-name="GitHub Actions Pool"
+
+# 2. Create a Provider for GitHub
+gcloud iam workload-identity-pools providers create-oidc "github-provider" \
+  --project="YOUR_PROJECT_ID" \
+  --location="global" \
+  --workload-identity-pool="github-pool" \
+  --display-name="GitHub Provider" \
+  --attribute-mapping="google.subject=assertion.sub,attribute.repository=assertion.repository" \
+  --issuer-uri="https://token.actions.githubusercontent.com"
+
+# 3. Create a Service Account for Terraform
+gcloud iam service-accounts create "terraform-github" \
+  --project="YOUR_PROJECT_ID" \
+  --display-name="Terraform GitHub Actions"
+
+# 4. Grant required roles
+for role in roles/editor roles/iam.securityAdmin roles/container.admin; do
+  gcloud projects add-iam-policy-binding YOUR_PROJECT_ID \
+    --member="serviceAccount:terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+    --role="$role"
+done
+
+# 5. Allow GitHub Actions to impersonate the SA
+gcloud iam service-accounts add-iam-policy-binding \
+  "terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com" \
+  --project="YOUR_PROJECT_ID" \
+  --role="roles/iam.workloadIdentityUser" \
+  --member="principalSet://iam.googleapis.com/projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/attribute.repository/Brayantcw/gke-kubeflow-deployment"
+```
+
+### GitHub Secrets
+
+Add these in **Settings → Secrets and variables → Actions**:
+
+| Secret | Value |
+|---|---|
+| `GCP_WORKLOAD_IDENTITY_PROVIDER` | `projects/YOUR_PROJECT_NUMBER/locations/global/workloadIdentityPools/github-pool/providers/github-provider` |
+| `GCP_SERVICE_ACCOUNT` | `terraform-github@YOUR_PROJECT_ID.iam.gserviceaccount.com` |
+
+### GitHub Environments
+
+Create two environments in **Settings → Environments**:
+
+- **`production`** — add required reviewers for apply approval
+- **`destroy`** — add required reviewers for destroy approval
+
 ## Teardown
 
+Via GitHub Actions (recommended):
+1. Go to **Actions → Terraform Destroy → Run workflow**
+2. Type `destroy` to confirm
+
+Or locally:
 ```bash
 cd environments/dev
 terraform destroy
