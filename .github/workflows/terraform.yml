@@ -4,14 +4,12 @@ on:
   push:
     branches: [main]
     paths:
-      - 'modules/**'
-      - 'environments/**'
+      - 'infra/**'
       - '.github/workflows/terraform.yml'
   pull_request:
     branches: [main]
     paths:
-      - 'modules/**'
-      - 'environments/**'
+      - 'infra/**'
       - '.github/workflows/terraform.yml'
   workflow_dispatch:
     inputs:
@@ -29,7 +27,7 @@ permissions:
 
 env:
   TF_VERSION: '1.12.1'
-  WORKING_DIR: 'environments/dev'
+  WORKING_DIR: 'infra/environments/dev'
 
 jobs:
   terraform-fmt:
@@ -45,7 +43,7 @@ jobs:
           terraform_version: ${{ env.TF_VERSION }}
 
       - name: Terraform Format
-        run: terraform fmt -recursive -check
+        run: terraform fmt -recursive -check infra/
         continue-on-error: false
 
   terraform-validate:
