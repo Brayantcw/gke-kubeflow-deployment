@@ -103,95 +103,33 @@ variable "master_authorized_networks" {
   ]
 }
 
-# Kubeflow
+# IAM
 variable "create_kubeflow_sa" {
   description = "Create Kubeflow Pipelines service account with Workload Identity"
   type        = bool
   default     = false
 }
 
-variable "install_kubeflow" {
-  description = "Install Kubeflow platform (Istio, cert-manager, and Kubeflow manifests)"
-  type        = bool
-  default     = true
-}
-
-variable "kubeflow_version" {
-  description = "Kubeflow manifests git branch/tag. Component versions are coordinated within a branch."
+# ArgoCD / GitOps
+variable "argocd_version" {
+  description = "ArgoCD Helm chart version"
   type        = string
-  default     = "v1.11-branch"
+  default     = "7.8.8"
 }
 
-variable "istio_version" {
-  description = "Istio Helm chart version"
+variable "gitops_repo_url" {
+  description = "Git repository URL that ArgoCD watches for platform manifests"
   type        = string
-  default     = "1.24.3"
 }
 
-variable "cert_manager_version" {
-  description = "cert-manager Helm chart version"
+variable "gitops_revision" {
+  description = "Git branch or tag ArgoCD tracks"
   type        = string
-  default     = "v1.17.2"
+  default     = "main"
 }
 
-# --- Kubeflow component toggles ---
-
-variable "enable_pipelines" {
-  description = "Install Kubeflow Pipelines"
-  type        = bool
-  default     = true
-}
-
-variable "enable_notebooks" {
-  description = "Install Jupyter Notebooks"
-  type        = bool
-  default     = true
-}
-
-variable "enable_katib" {
-  description = "Install Katib (hyperparameter tuning)"
-  type        = bool
-  default     = true
-}
-
-variable "enable_kserve" {
-  description = "Install KServe (model serving)"
-  type        = bool
-  default     = false
-}
-
-variable "enable_training_operator" {
-  description = "Install Trainer v2 (distributed training)"
-  type        = bool
-  default     = true
-}
-
-variable "enable_tensorboard" {
-  description = "Install Tensorboard"
-  type        = bool
-  default     = true
-}
-
-variable "enable_volumes_web_app" {
-  description = "Install Volumes Web App"
-  type        = bool
-  default     = true
-}
-
-variable "enable_knative_eventing" {
-  description = "Install Knative Eventing"
-  type        = bool
-  default     = false
-}
-
-variable "enable_spark_operator" {
-  description = "Install Spark Operator"
-  type        = bool
-  default     = false
-}
-
-variable "enable_user_namespace" {
-  description = "Create default user namespace"
-  type        = bool
-  default     = true
+variable "gitops_path" {
+  description = "Path within the repo to the ArgoCD app-of-apps definition"
+  type        = string
+  default     = "gitops/argocd"
 }

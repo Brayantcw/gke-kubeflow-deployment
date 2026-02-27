@@ -1,0 +1,34 @@
+# Copy this file to terraform.tfvars and fill in your values
+project_id = "your-gcp-project-id"
+region     = "us-central1"
+zones      = ["us-central1-a"]
+
+environment  = "dev"
+service_name = "kubeflow"
+
+# Cost optimization: Spot VMs are 60-91% cheaper but can be preempted
+use_spot_instances = true
+
+# Single node to start, scale up as needed
+min_node_count     = 1
+max_node_count     = 3
+initial_node_count = 1
+machine_type       = "e2-standard-4"
+disk_size_gb       = 50
+
+# Restrict API access to your IP for security (recommended)
+# master_authorized_networks = [
+#   {
+#     cidr_block   = "YOUR_IP/32"
+#     display_name = "my-ip"
+#   }
+# ]
+
+# IAM
+create_kubeflow_sa = false
+
+# ArgoCD / GitOps
+argocd_version  = "7.8.8"
+gitops_repo_url = "https://github.com/Brayantcw/gke-kubeflow-deployment.git"
+gitops_revision = "main"
+gitops_path     = "gitops/argocd"

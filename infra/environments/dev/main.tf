@@ -91,30 +91,16 @@ module "gke" {
   depends_on = [module.network, module.iam]
 }
 
-# --- Kubeflow ---
-module "kubeflow" {
-  source = "../../modules/kubeflow"
+# --- ArgoCD Bootstrap ---
+# Installs ArgoCD and creates a root Application that points to gitops/.
+# ArgoCD then takes over deploying Istio, cert-manager, and Kubeflow.
+module "argocd_bootstrap" {
+  source = "../../modules/argocd-bootstrap"
 
-  cluster_endpoint       = module.gke.cluster_endpoint
-  cluster_ca_certificate = module.gke.cluster_ca_certificate
-
-  # Versions
-  install_kubeflow     = var.install_kubeflow
-  kubeflow_version     = var.kubeflow_version
-  istio_version        = var.istio_version
-  cert_manager_version = var.cert_manager_version
-
-  # Component toggles
-  enable_pipelines         = var.enable_pipelines
-  enable_notebooks         = var.enable_notebooks
-  enable_katib             = var.enable_katib
-  enable_kserve            = var.enable_kserve
-  enable_training_operator = var.enable_training_operator
-  enable_tensorboard       = var.enable_tensorboard
-  enable_volumes_web_app   = var.enable_volumes_web_app
-  enable_knative_eventing  = var.enable_knative_eventing
-  enable_spark_operator    = var.enable_spark_operator
-  enable_user_namespace    = var.enable_user_namespace
+  argocd_version = var.argocd_version
+  gitops_repo_url = var.gitops_repo_url
+  gitops_revision = var.gitops_revision
+  gitops_path     = var.gitops_path
 
   depends_on = [module.gke]
 }
