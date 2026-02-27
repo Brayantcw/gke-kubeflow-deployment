@@ -97,7 +97,7 @@ module "gke" {
 module "argocd_bootstrap" {
   source = "../../modules/argocd-bootstrap"
 
-  argocd_version = var.argocd_version
+  argocd_version  = var.argocd_version
   gitops_repo_url = var.gitops_repo_url
   gitops_revision = var.gitops_revision
   gitops_path     = var.gitops_path
