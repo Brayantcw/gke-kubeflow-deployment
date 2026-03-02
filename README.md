@@ -6,31 +6,14 @@ Deploys Kubeflow on a private GKE cluster using a two-layer architecture:
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────────────┐
-│                     Terraform (infra/)                          │
-│                                                                 │
-│  VPC + Subnets + NAT ──► GKE Cluster ──► IAM ──► ArgoCD        │
-│                                                                 │
-│  Terraform creates the cluster and installs ArgoCD.             │
-│  ArgoCD is seeded with a root Application pointing to gitops/.  │
-└──────────────────────────┬──────────────────────────────────────┘
-                           │
-                           │ ArgoCD watches gitops/ and syncs
-                           ▼
-┌─────────────────────────────────────────────────────────────────┐
-│                     ArgoCD (gitops/)                             │
-│                                                                 │
-│  Istio (Helm) ──► cert-manager (Helm) ──► Kubeflow (Kustomize) │
-│                                                                 │
-│  Continuous reconciliation: drift detection + self-healing.     │
-│  Upgrades = change a version in git, merge, ArgoCD syncs.       │
-└─────────────────────────────────────────────────────────────────┘
-```
+![Architecture Diagram](docs/Architecture_mlops.drawio.png)
 
 ## Repository Structure
 
 ```
+├── docs/                               Documentation and diagrams
+│   └── Architecture_mlops.drawio.png   Architecture diagram
+│
 ├── infra/                              Terraform — cloud infrastructure
 │   ├── modules/
 │   │   ├── network/                    VPC, subnets, Cloud NAT, firewall
